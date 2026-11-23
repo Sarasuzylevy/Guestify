@@ -1,0 +1,6 @@
+{
+  "name": "Guestify - Wedding Coordination & Guest Platform",
+  "description": "Centralized wedding coordination platform connecting couples, guests, and verified vendors with live RSVP management, task checklists, and interactive calendars.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

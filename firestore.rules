@@ -1,0 +1,762 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Global Security Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isWeddingOwner(weddingId) {
+      return isVerifiedUser()
+        && exists(/databases/$(database)/documents/weddings/$(weddingId))
+        && get(/databases/$(database)/documents/weddings/$(weddingId)).data.ownerUid == request.auth.uid;
+    }
+
+    function isVendorOwner(vendorId) {
+      return isVerifiedUser()
+        && exists(/databases/$(database)/documents/vendors/$(vendorId))
+        && get(/databases/$(database)/documents/vendors/$(vendorId)).data.ownerUid == request.auth.uid;
+    }
+
+    function isChatParticipant(chatId) {
+      return isVerifiedUser()
+        && exists(/databases/$(database)/documents/vendorChats/$(chatId))
+        && (
+          get(/databases/$(database)/documents/vendorChats/$(chatId)).data.coupleUid == request.auth.uid
+          || get(/databases/$(database)/documents/vendorChats/$(chatId)).data.vendorOwnerUid == request.auth.uid
+        );
+    }
+
+    // 3. Entity Validation Blueprints
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'role', 'hasWeddingProject', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'name', 'email', 'role', 'avatar', 'hasWeddingProject', 'vendorProfileId', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == userId
+        && data.uid == request.auth.uid
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 200
+        && data.role is string && data.role in ['guest', 'couple', 'vendor']
+        && data.hasWeddingProject is bool
+        && (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 350000))
+        && (!('vendorProfileId' in data) || (data.vendorProfileId is string && data.vendorProfileId.size() <= 128))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPublicProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'acronym', 'searchable', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'acronym', 'searchable', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == userId
+        && data.uid == request.auth.uid
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120
+        && data.acronym is string && data.acronym.size() >= 1 && data.acronym.size() <= 10
+        && data.searchable is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidEmailDirectoryEntry(data, emailHash) {
+      return data.keys().hasAll(['emailHash', 'uid', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['emailHash', 'uid', 'createdAt', 'updatedAt'])
+        && data.emailHash is string
+        && data.emailHash.size() == 64
+        && data.emailHash.matches('^[a-f0-9]{64}$')
+        && data.emailHash == emailHash
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWeddingProject(data, weddingId) {
+      return data.keys().hasAll([
+          'id', 'ownerUid', 'isCreated', 'coupleNames', 'partner1', 'partner2',
+          'weddingDate', 'city', 'totalBudget', 'guestCount', 'currency', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'ownerUid', 'isCreated', 'coupleNames', 'partner1', 'partner2',
+          'weddingDate', 'city', 'venueName', 'address', 'time', 'chuppahTime',
+          'dinnerTime', 'partyTime', 'dressCode', 'storyMessage', 'giftRegistryUrl',
+          'totalBudget', 'guestCount', 'currency',
+          'invitationCardUrl', 'invitationCardType', 'invitationCardName', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.id == weddingId
+        && isValidId(data.ownerUid)
+        && data.isCreated is bool
+        && data.coupleNames is string && data.coupleNames.size() <= 160
+        && data.partner1 is string && data.partner1.size() <= 80
+        && data.partner2 is string && data.partner2.size() <= 80
+        && data.weddingDate is string && data.weddingDate.size() <= 30
+        && data.city is string && data.city.size() <= 100
+        && (!('venueName' in data) || (data.venueName is string && data.venueName.size() <= 160))
+        && (!('address' in data) || (data.address is string && data.address.size() <= 240))
+        && (!('time' in data) || (data.time is string && data.time.size() <= 30))
+        && (!('chuppahTime' in data) || (data.chuppahTime is string && data.chuppahTime.size() <= 30))
+        && (!('dinnerTime' in data) || (data.dinnerTime is string && data.dinnerTime.size() <= 30))
+        && (!('partyTime' in data) || (data.partyTime is string && data.partyTime.size() <= 30))
+        && (!('dressCode' in data) || (data.dressCode is string && data.dressCode.size() <= 120))
+        && (!('storyMessage' in data) || (data.storyMessage is string && data.storyMessage.size() <= 600))
+        && (!('giftRegistryUrl' in data) || (data.giftRegistryUrl is string && data.giftRegistryUrl.size() <= 400))
+        && data.totalBudget is number && data.totalBudget >= 0 && data.totalBudget <= 100000000
+        && data.guestCount is number && data.guestCount >= 0 && data.guestCount <= 50000
+        && data.currency is string && data.currency in ['€', '$', '₪']
+        && (!('invitationCardUrl' in data) || (data.invitationCardUrl is string && data.invitationCardUrl.size() <= 650000))
+        && (!('invitationCardType' in data) || (data.invitationCardType is string && data.invitationCardType in ['pdf', 'link', 'image']))
+        && (!('invitationCardName' in data) || (data.invitationCardName is string && data.invitationCardName.size() <= 160))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWeddingTask(data, weddingId, taskId) {
+      return data.keys().hasAll(['id', 'ownerUid', 'weddingId', 'title', 'category', 'status', 'isSelected', 'estimatedCost', 'paidAdvance', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'ownerUid', 'weddingId', 'title', 'category', 'status', 'isSelected', 'estimatedCost', 'paidAdvance', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.id == taskId
+        && isValidId(data.ownerUid)
+        && isValidId(data.weddingId)
+        && data.weddingId == weddingId
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 160
+        && data.category is string && data.category.size() >= 1 && data.category.size() <= 80
+        && data.status is string && data.status in ['pending', 'in_progress', 'completed']
+        && data.isSelected is bool
+        && data.estimatedCost is number && data.estimatedCost >= 0
+        && data.paidAdvance is number && data.paidAdvance >= 0
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWeddingGuest(data, weddingId, guestId) {
+      return data.keys().hasAll(['id', 'ownerUid', 'weddingId', 'guestName', 'guestEmail', 'status', 'invitedDate', 'plusOneAllowed', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'id', 'ownerUid', 'weddingId', 'guestName', 'guestEmail', 'guestUid', 'acronym',
+          'status', 'invitedDate', 'invitationCardUrl', 'invitationCardType', 'invitationCardName',
+          'plusOneAllowed', 'weddingSide', 'declineReason', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.id == guestId
+        && isValidId(data.ownerUid)
+        && isValidId(data.weddingId)
+        && data.weddingId == weddingId
+        && data.guestName is string && data.guestName.size() >= 1 && data.guestName.size() <= 120
+        && data.guestEmail is string && data.guestEmail.size() <= 200
+        && (!('guestUid' in data) || (data.guestUid is string && data.guestUid.size() <= 128))
+        && (!('acronym' in data) || (data.acronym is string && data.acronym.size() <= 10))
+        && data.status is string && data.status in ['pending', 'confirmed', 'maybe', 'declined']
+        && data.invitedDate is string && data.invitedDate.size() <= 50
+        && (!('invitationCardUrl' in data) || (data.invitationCardUrl is string && data.invitationCardUrl.size() <= 650000))
+        && (!('invitationCardType' in data) || (data.invitationCardType is string && data.invitationCardType in ['pdf', 'link', 'image']))
+        && (!('invitationCardName' in data) || (data.invitationCardName is string && data.invitationCardName.size() <= 160))
+        && data.plusOneAllowed is bool
+        && (!('weddingSide' in data) || (data.weddingSide is string && data.weddingSide in ['bride', 'groom']))
+        && (!('declineReason' in data) || (data.declineReason is string && data.declineReason.size() <= 500))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidInvitation(data, invitationId) {
+      return data.keys().hasAll(['id', 'organizerUid', 'weddingId', 'wedding', 'guestId', 'guestName', 'guestEmail', 'status', 'invitedDate', 'plusOneAllowed', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'id', 'organizerUid', 'weddingId', 'wedding', 'guestId', 'guestUid', 'guestName', 'guestEmail',
+          'status', 'invitedDate', 'plusOneAllowed', 'personalNote', 'invitationCardUrl',
+          'invitationCardType', 'invitationCardName', 'lastUpdated', 'weddingSide', 'declineReason', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.id == invitationId
+        && isValidId(data.organizerUid)
+        && isValidId(data.weddingId)
+        && data.wedding is map && data.wedding.keys().size() <= 25
+        && data.guestId is string && data.guestId.size() >= 1 && data.guestId.size() <= 128
+        && (!('guestUid' in data) || (data.guestUid is string && data.guestUid.size() <= 128))
+        && data.guestName is string && data.guestName.size() >= 1 && data.guestName.size() <= 120
+        && data.guestEmail is string && data.guestEmail.size() <= 200
+        && data.status is string && data.status in ['pending', 'confirmed', 'maybe', 'declined']
+        && data.invitedDate is string && data.invitedDate.size() <= 50
+        && data.plusOneAllowed is bool
+        && (!('personalNote' in data) || (data.personalNote is string && data.personalNote.size() <= 500))
+        && (!('invitationCardUrl' in data) || (data.invitationCardUrl is string && data.invitationCardUrl.size() <= 650000))
+        && (!('invitationCardType' in data) || (data.invitationCardType is string && data.invitationCardType in ['pdf', 'link', 'image']))
+        && (!('invitationCardName' in data) || (data.invitationCardName is string && data.invitationCardName.size() <= 160))
+        && (!('lastUpdated' in data) || (data.lastUpdated is string && data.lastUpdated.size() <= 50))
+        && (!('weddingSide' in data) || (data.weddingSide is string && data.weddingSide in ['bride', 'groom']))
+        && (!('declineReason' in data) || (data.declineReason is string && data.declineReason.size() <= 500))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidVendor(data, vendorId) {
+      return data.keys().hasAll([
+          'id', 'ownerUid', 'businessName', 'ownerName', 'location', 'priceTier',
+          'startingPrice', 'rating', 'reviewCount', 'description', 'services',
+          'coverPhoto', 'portfolio', 'verified', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'ownerUid', 'businessName', 'ownerName', 'location',
+          'storeLocations', 'workZones', 'priceTier',
+          'startingPrice', 'rating', 'reviewCount', 'description', 'services',
+          'coverPhoto', 'logoUrl', 'portfolio', 'verified', 'instagramHandle', 'website', 'reviews',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.id == vendorId
+        && isValidId(data.ownerUid)
+        && data.businessName is string && data.businessName.size() >= 1 && data.businessName.size() <= 120
+        && data.ownerName is string && data.ownerName.size() >= 1 && data.ownerName.size() <= 120
+        && data.location is string && data.location.size() >= 1 && data.location.size() <= 120
+        && (!('storeLocations' in data) || (data.storeLocations is list && data.storeLocations.size() <= 150 && (data.storeLocations.size() == 0 || data.storeLocations[0] is string)))
+        && (!('workZones' in data) || (data.workZones is list && data.workZones.size() <= 150 && (data.workZones.size() == 0 || data.workZones[0] is string)))
+        && data.priceTier is string && data.priceTier in ['$', '$$', '$$$', '$$$$']
+        && data.startingPrice is number && data.startingPrice >= 0
+        && data.rating is number && data.rating >= 0 && data.rating <= 5
+        && data.reviewCount is number && data.reviewCount >= 0
+        && data.description is string && data.description.size() <= 1500
+        && data.services is list && data.services.size() >= 1 && data.services.size() <= 9 && data.services[0] is string
+        && data.coverPhoto is string && data.coverPhoto.size() <= 350000
+        && (!('logoUrl' in data) || (data.logoUrl is string && data.logoUrl.size() <= 350000))
+        && data.portfolio is list && data.portfolio.size() <= 30 && (data.portfolio.size() == 0 || data.portfolio[0] is map)
+        && data.verified is bool
+        && (!('instagramHandle' in data) || (data.instagramHandle is string && data.instagramHandle.size() <= 100))
+        && (!('website' in data) || (data.website is string && data.website.size() <= 300))
+        && (!('reviews' in data) || (data.reviews is list && data.reviews.size() <= 50 && (data.reviews.size() == 0 || data.reviews[0] is map)))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidVendorPrivateContact(data) {
+      return data.keys().hasAll(['ownerUid', 'email', 'phone', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerUid', 'email', 'phone', 'createdAt', 'updatedAt'])
+        && isValidId(data.ownerUid)
+        && data.email is string && data.email.size() <= 200
+        && data.phone is string && data.phone.size() <= 40
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidVendorPostLike(data, vendorId, likeId) {
+      return data.keys().hasAll(['id', 'vendorId', 'postId', 'userUid', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'vendorId', 'postId', 'userUid', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.id == likeId
+        && isValidId(data.vendorId)
+        && data.vendorId == vendorId
+        && isValidId(data.postId)
+        && isValidId(data.userUid)
+        && data.userUid == request.auth.uid
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidRsvpToken(data, tokenId) {
+      return data.keys().hasAll([
+          'token', 'organizerUid', 'weddingId', 'invitationId', 'guestId',
+          'guestName', 'coupleNames', 'weddingDate', 'venueName', 'city',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'token', 'organizerUid', 'weddingId', 'invitationId', 'guestId',
+          'guestName', 'guestEmail', 'coupleNames', 'weddingDate', 'venueName', 'city',
+          'address', 'time', 'chuppahTime', 'dinnerTime', 'partyTime',
+          'dressCode', 'storyMessage', 'giftRegistryUrl',
+          'invitationCardUrl', 'invitationCardType', 'invitationCardName',
+          'status', 'respondedAt', 'weddingSide', 'declineReason', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.token)
+        && data.token.size() >= 32
+        && data.token == tokenId
+        && isValidId(data.organizerUid)
+        && isValidId(data.weddingId)
+        && isValidId(data.invitationId)
+        && isValidId(data.guestId)
+        && data.guestName is string && data.guestName.size() >= 1 && data.guestName.size() <= 120
+        && (!('guestEmail' in data) || (data.guestEmail is string && data.guestEmail.size() <= 200))
+        && data.coupleNames is string && data.coupleNames.size() >= 1 && data.coupleNames.size() <= 160
+        && data.weddingDate is string && data.weddingDate.size() <= 30
+        && data.venueName is string && data.venueName.size() <= 160
+        && data.city is string && data.city.size() <= 100
+        && (!('address' in data) || (data.address is string && data.address.size() <= 240))
+        && (!('time' in data) || (data.time is string && data.time.size() <= 30))
+        && (!('chuppahTime' in data) || (data.chuppahTime is string && data.chuppahTime.size() <= 30))
+        && (!('dinnerTime' in data) || (data.dinnerTime is string && data.dinnerTime.size() <= 30))
+        && (!('partyTime' in data) || (data.partyTime is string && data.partyTime.size() <= 30))
+        && (!('dressCode' in data) || (data.dressCode is string && data.dressCode.size() <= 120))
+        && (!('storyMessage' in data) || (data.storyMessage is string && data.storyMessage.size() <= 600))
+        && (!('giftRegistryUrl' in data) || (data.giftRegistryUrl is string && data.giftRegistryUrl.size() <= 400))
+        && (!('invitationCardUrl' in data) || (data.invitationCardUrl is string && data.invitationCardUrl.size() <= 650000))
+        && (!('invitationCardType' in data) || (data.invitationCardType is string && data.invitationCardType in ['pdf', 'link', 'image']))
+        && (!('invitationCardName' in data) || (data.invitationCardName is string && data.invitationCardName.size() <= 160))
+        && data.status is string && data.status in ['pending', 'confirmed', 'maybe', 'declined']
+        && (!('respondedAt' in data) || (data.respondedAt is string && data.respondedAt.size() <= 50))
+        && (!('weddingSide' in data) || (data.weddingSide is string && data.weddingSide in ['bride', 'groom']))
+        && (!('declineReason' in data) || (data.declineReason is string && data.declineReason.size() <= 500))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidVendorChat(data, chatId) {
+      return data.keys().hasAll([
+          'id', 'coupleUid', 'coupleName', 'vendorId', 'vendorOwnerUid',
+          'vendorName', 'lastMessageText', 'lastMessageSenderUid',
+          'lastMessageAt', 'coupleUnreadCount', 'vendorUnreadCount',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'coupleUid', 'coupleName', 'vendorId', 'vendorOwnerUid',
+          'vendorName', 'vendorPhoto', 'weddingDate', 'weddingCity',
+          'lastMessageText', 'lastMessageSenderUid', 'lastMessageAt',
+          'coupleUnreadCount', 'vendorUnreadCount', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.id == chatId
+        && isValidId(data.coupleUid)
+        && data.coupleName is string && data.coupleName.size() >= 1 && data.coupleName.size() <= 120
+        && isValidId(data.vendorId)
+        && isValidId(data.vendorOwnerUid)
+        && data.vendorName is string && data.vendorName.size() >= 1 && data.vendorName.size() <= 120
+        && (!('vendorPhoto' in data) || (data.vendorPhoto is string && data.vendorPhoto.size() <= 350000))
+        && (!('weddingDate' in data) || (data.weddingDate is string && data.weddingDate.size() <= 30))
+        && (!('weddingCity' in data) || (data.weddingCity is string && data.weddingCity.size() <= 100))
+        && data.lastMessageText is string && data.lastMessageText.size() >= 1 && data.lastMessageText.size() <= 1500
+        && isValidId(data.lastMessageSenderUid)
+        && data.lastMessageAt is timestamp
+        && data.coupleUnreadCount is number && data.coupleUnreadCount >= 0 && data.coupleUnreadCount <= 10000
+        && data.vendorUnreadCount is number && data.vendorUnreadCount >= 0 && data.vendorUnreadCount <= 10000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidVendorChatMessage(data, chatId, messageId) {
+      return data.keys().hasAll([
+          'id', 'chatId', 'senderUid', 'recipientUid',
+          'senderName', 'senderRole', 'text', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'chatId', 'senderUid', 'recipientUid',
+          'senderName', 'senderRole', 'text', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.id == messageId
+        && isValidId(data.chatId)
+        && data.chatId == chatId
+        && isValidId(data.senderUid)
+        && data.senderUid == request.auth.uid
+        && isValidId(data.recipientUid)
+        && data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 120
+        && data.senderRole is string && data.senderRole in ['couple', 'vendor']
+        && data.text is string && data.text.size() >= 1 && data.text.size() <= 1500
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // 4. Collection Rules
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if isVerifiedUser() && resource.data.uid == request.auth.uid;
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'role', 'avatar', 'hasWeddingProject', 'vendorProfileId', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /publicProfiles/{userId} {
+      allow get: if isValidId(userId) && isVerifiedUser();
+      allow list: if isVerifiedUser() && resource.data.searchable == true;
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidPublicProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidPublicProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'acronym', 'searchable', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /emailDirectory/{emailHash} {
+      allow get: if isValidId(emailHash)
+        && emailHash.size() == 64
+        && emailHash.matches('^[a-f0-9]{64}$')
+        && (
+          isVerifiedUser()
+          || (
+            isSignedIn()
+            && request.auth.token.email is string
+            && hashing.sha256(request.auth.token.email.lower().toUtf8()).toHexString().lower() == emailHash
+          )
+        );
+      allow list: if false;
+      allow create: if isValidId(emailHash)
+        && emailHash.size() == 64
+        && emailHash.matches('^[a-f0-9]{64}$')
+        && isSignedIn()
+        && isValidEmailDirectoryEntry(incoming(), emailHash)
+        && request.auth.token.email is string
+        && hashing.sha256(request.auth.token.email.lower().toUtf8()).toHexString().lower() == emailHash
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(emailHash)
+        && emailHash.size() == 64
+        && emailHash.matches('^[a-f0-9]{64}$')
+        && isVerifiedUser()
+        && existing().uid == request.auth.uid
+        && isValidEmailDirectoryEntry(incoming(), emailHash)
+        && incoming().uid == existing().uid
+        && incoming().emailHash == existing().emailHash
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt']);
+      allow delete: if false;
+    }
+
+    match /weddings/{weddingId} {
+      allow get: if isValidId(weddingId) && isVerifiedUser() && (
+        (resource == null && weddingId == ('wed_' + request.auth.uid))
+        || (resource != null && existing().ownerUid == request.auth.uid)
+      );
+      allow list: if isVerifiedUser() && resource.data.ownerUid == request.auth.uid;
+      allow create: if isValidId(weddingId)
+        && isVerifiedUser()
+        && isValidWeddingProject(incoming(), weddingId)
+        && incoming().ownerUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(weddingId)
+        && isVerifiedUser()
+        && existing().ownerUid == request.auth.uid
+        && isValidWeddingProject(incoming(), weddingId)
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'isCreated', 'coupleNames', 'partner1', 'partner2', 'weddingDate', 'city',
+          'venueName', 'address', 'time', 'chuppahTime', 'dinnerTime', 'partyTime',
+          'dressCode', 'storyMessage', 'giftRegistryUrl',
+          'totalBudget', 'guestCount', 'currency',
+          'invitationCardUrl', 'invitationCardType', 'invitationCardName', 'updatedAt'
+        ]);
+      allow delete: if isValidId(weddingId) && isVerifiedUser() && existing().ownerUid == request.auth.uid;
+
+      match /tasks/{taskId} {
+        allow get: if isValidId(weddingId) && isValidId(taskId) && isWeddingOwner(weddingId);
+        allow list: if isVerifiedUser() && resource.data.ownerUid == request.auth.uid;
+        allow create: if isValidId(weddingId)
+          && isValidId(taskId)
+          && isVerifiedUser()
+          && isValidWeddingTask(incoming(), weddingId, taskId)
+          && incoming().ownerUid == request.auth.uid
+          && isWeddingOwner(weddingId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(weddingId)
+          && isValidId(taskId)
+          && isVerifiedUser()
+          && existing().ownerUid == request.auth.uid
+          && isValidWeddingTask(incoming(), weddingId, taskId)
+          && incoming().ownerUid == existing().ownerUid
+          && incoming().weddingId == existing().weddingId
+          && incoming().id == existing().id
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && isWeddingOwner(weddingId)
+          && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'category', 'status', 'isSelected', 'estimatedCost', 'paidAdvance', 'updatedAt']);
+        allow delete: if isValidId(weddingId) && isValidId(taskId) && isWeddingOwner(weddingId);
+      }
+
+      match /guests/{guestId} {
+        allow get: if isValidId(weddingId) && isValidId(guestId) && isWeddingOwner(weddingId);
+        allow list: if isVerifiedUser() && resource.data.ownerUid == request.auth.uid;
+        allow create: if isValidId(weddingId)
+          && isValidId(guestId)
+          && isVerifiedUser()
+          && isValidWeddingGuest(incoming(), weddingId, guestId)
+          && incoming().ownerUid == request.auth.uid
+          && isWeddingOwner(weddingId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(weddingId)
+          && isValidId(guestId)
+          && isVerifiedUser()
+          && existing().ownerUid == request.auth.uid
+          && isValidWeddingGuest(incoming(), weddingId, guestId)
+          && incoming().ownerUid == existing().ownerUid
+          && incoming().weddingId == existing().weddingId
+          && incoming().id == existing().id
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && isWeddingOwner(weddingId)
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'status', 'weddingSide', 'declineReason', 'invitationCardUrl', 'invitationCardType', 'invitationCardName', 'guestUid', 'updatedAt'
+          ]);
+        allow delete: if isValidId(weddingId) && isValidId(guestId) && isWeddingOwner(weddingId);
+      }
+    }
+
+    match /invitations/{invitationId} {
+      allow get: if isValidId(invitationId) && isVerifiedUser() && (
+        existing().organizerUid == request.auth.uid
+        || existing().guestUid == request.auth.uid
+        || (request.auth.token.email != null && existing().guestEmail.lower() == request.auth.token.email.lower())
+      );
+      allow list: if isVerifiedUser() && (
+        resource.data.organizerUid == request.auth.uid
+        || resource.data.guestUid == request.auth.uid
+        || (request.auth.token.email != null && (
+          resource.data.guestEmail == request.auth.token.email.lower()
+          || resource.data.guestEmail == request.auth.token.email
+        ))
+      );
+      allow create: if isValidId(invitationId)
+        && isVerifiedUser()
+        && isValidInvitation(incoming(), invitationId)
+        && incoming().organizerUid == request.auth.uid
+        && isWeddingOwner(incoming().weddingId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(invitationId)
+        && isVerifiedUser()
+        && isValidInvitation(incoming(), invitationId)
+        && incoming().organizerUid == existing().organizerUid
+        && incoming().weddingId == existing().weddingId
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (existing().organizerUid == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'weddingSide', 'declineReason', 'lastUpdated', 'wedding', 'invitationCardUrl', 'invitationCardType', 'invitationCardName', 'updatedAt'
+            ]))
+          || ((existing().guestUid == request.auth.uid || (request.auth.token.email != null && existing().guestEmail.lower() == request.auth.token.email.lower()))
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'weddingSide', 'declineReason', 'lastUpdated', 'updatedAt']))
+        );
+      allow delete: if isValidId(invitationId) && isVerifiedUser() && existing().organizerUid == request.auth.uid;
+    }
+
+    match /rsvpTokens/{token} {
+      allow get: if isValidId(token) && token.size() >= 32;
+      allow list: if isVerifiedUser() && resource.data.organizerUid == request.auth.uid;
+      allow create: if isValidId(token)
+        && token.size() >= 32
+        && isVerifiedUser()
+        && isValidRsvpToken(incoming(), token)
+        && incoming().organizerUid == request.auth.uid
+        && isWeddingOwner(incoming().weddingId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(token)
+        && token.size() >= 32
+        && isValidRsvpToken(incoming(), token)
+        && incoming().token == existing().token
+        && incoming().organizerUid == existing().organizerUid
+        && incoming().weddingId == existing().weddingId
+        && incoming().invitationId == existing().invitationId
+        && incoming().guestId == existing().guestId
+        && incoming().guestName == existing().guestName
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (isVerifiedUser()
+            && existing().organizerUid == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'weddingSide', 'declineReason', 'respondedAt', 'guestEmail', 'coupleNames', 'weddingDate', 'venueName', 'city', 'address',
+              'time', 'chuppahTime', 'dinnerTime', 'partyTime',
+              'dressCode', 'storyMessage', 'giftRegistryUrl',
+              'invitationCardUrl', 'invitationCardType', 'invitationCardName', 'updatedAt'
+            ]))
+          || (
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'weddingSide', 'declineReason', 'respondedAt', 'updatedAt'])
+            && (
+              !isSignedIn()
+              || (
+                isVerifiedUser()
+                && existing().organizerUid != request.auth.uid
+                && request.auth.token.email != null
+                && (!('guestEmail' in existing()) || existing().guestEmail == '' || existing().guestEmail.lower() == request.auth.token.email.lower())
+              )
+            )
+          )
+        );
+      allow delete: if isValidId(token) && isVerifiedUser() && existing().organizerUid == request.auth.uid;
+    }
+
+    match /vendors/{vendorId} {
+      allow get: if isValidId(vendorId) && isVerifiedUser() && (
+        (resource == null && vendorId == ('vnd_' + request.auth.uid))
+        || (resource != null && (existing().verified == true || existing().ownerUid == request.auth.uid))
+      );
+      allow list: if isVerifiedUser() && (resource.data.verified == true || resource.data.ownerUid == request.auth.uid);
+      allow create: if isValidId(vendorId)
+        && isVerifiedUser()
+        && isValidVendor(incoming(), vendorId)
+        && incoming().ownerUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(vendorId)
+        && isVerifiedUser()
+        && existing().ownerUid == request.auth.uid
+        && isValidVendor(incoming(), vendorId)
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'businessName', 'ownerName', 'location', 'storeLocations', 'workZones', 'priceTier', 'startingPrice',
+          'description', 'services', 'coverPhoto', 'logoUrl', 'portfolio',
+          'instagramHandle', 'website', 'reviews', 'rating', 'reviewCount', 'updatedAt'
+        ]);
+      allow delete: if isValidId(vendorId) && isVerifiedUser() && existing().ownerUid == request.auth.uid;
+
+      match /private/{docId} {
+        allow get: if isValidId(vendorId) && isValidId(docId) && isVendorOwner(vendorId);
+        allow list: if isVerifiedUser() && resource.data.ownerUid == request.auth.uid;
+        allow create: if isValidId(vendorId)
+          && isValidId(docId)
+          && isVerifiedUser()
+          && isValidVendorPrivateContact(incoming())
+          && incoming().ownerUid == request.auth.uid
+          && isVendorOwner(vendorId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(vendorId)
+          && isValidId(docId)
+          && isVerifiedUser()
+          && existing().ownerUid == request.auth.uid
+          && isValidVendorPrivateContact(incoming())
+          && incoming().ownerUid == existing().ownerUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && isVendorOwner(vendorId)
+          && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'phone', 'updatedAt']);
+        allow delete: if isValidId(vendorId) && isValidId(docId) && isVendorOwner(vendorId);
+      }
+
+      match /likes/{likeId} {
+        allow get: if isValidId(vendorId) && isValidId(likeId) && isVerifiedUser();
+        allow list: if isVerifiedUser() && resource.data.vendorId == vendorId;
+        allow create: if isValidId(vendorId)
+          && isValidId(likeId)
+          && isVerifiedUser()
+          && isValidVendorPostLike(incoming(), vendorId, likeId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/vendors/$(vendorId))
+          && get(/databases/$(database)/documents/vendors/$(vendorId)).data.ownerUid != request.auth.uid;
+        allow update: if false;
+        allow delete: if isValidId(vendorId) && isValidId(likeId) && isVerifiedUser() && existing().userUid == request.auth.uid;
+      }
+    }
+
+    match /vendorChats/{chatId} {
+      allow get: if isValidId(chatId) && isVerifiedUser() && (
+        (resource == null && chatId.matches('^chat_' + request.auth.uid + '_.*'))
+        || (resource != null && (existing().coupleUid == request.auth.uid || existing().vendorOwnerUid == request.auth.uid))
+      );
+      allow list: if isVerifiedUser() && (
+        resource.data.coupleUid == request.auth.uid
+        || resource.data.vendorOwnerUid == request.auth.uid
+      );
+      allow create: if isValidId(chatId)
+        && isVerifiedUser()
+        && isValidVendorChat(incoming(), chatId)
+        && incoming().coupleUid == request.auth.uid
+        && incoming().lastMessageSenderUid == request.auth.uid
+        && incoming().coupleUnreadCount == 0
+        && incoming().vendorUnreadCount == 1
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && incoming().lastMessageAt == request.time
+        && exists(/databases/$(database)/documents/vendors/$(incoming().vendorId))
+        && get(/databases/$(database)/documents/vendors/$(incoming().vendorId)).data.ownerUid == incoming().vendorOwnerUid;
+      allow update: if isValidId(chatId)
+        && isVerifiedUser()
+        && isValidVendorChat(incoming(), chatId)
+        && (existing().coupleUid == request.auth.uid || existing().vendorOwnerUid == request.auth.uid)
+        && incoming().id == existing().id
+        && incoming().coupleUid == existing().coupleUid
+        && incoming().vendorId == existing().vendorId
+        && incoming().vendorOwnerUid == existing().vendorOwnerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (incoming().lastMessageSenderUid == request.auth.uid
+            && incoming().lastMessageAt == request.time
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'coupleName', 'weddingDate', 'weddingCity',
+              'lastMessageText', 'lastMessageSenderUid', 'lastMessageAt',
+              'coupleUnreadCount', 'vendorUnreadCount', 'updatedAt'
+            ]))
+          || (incoming().diff(existing()).affectedKeys().hasOnly(['coupleUnreadCount', 'vendorUnreadCount', 'updatedAt'])
+            && ((existing().coupleUid == request.auth.uid && incoming().coupleUnreadCount == 0 && incoming().vendorUnreadCount == existing().vendorUnreadCount)
+              || (existing().vendorOwnerUid == request.auth.uid && incoming().vendorUnreadCount == 0 && incoming().coupleUnreadCount == existing().coupleUnreadCount)))
+        );
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow get: if isValidId(chatId) && isValidId(messageId) && isChatParticipant(chatId);
+        allow list: if isVerifiedUser() && (
+          resource.data.senderUid == request.auth.uid
+          || resource.data.recipientUid == request.auth.uid
+        );
+        allow create: if isValidId(chatId)
+          && isValidId(messageId)
+          && isVerifiedUser()
+          && isValidVendorChatMessage(incoming(), chatId, messageId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && existsAfter(/databases/$(database)/documents/vendorChats/$(chatId))
+          && (
+            (getAfter(/databases/$(database)/documents/vendorChats/$(chatId)).data.coupleUid == request.auth.uid
+              && incoming().senderRole == 'couple'
+              && incoming().recipientUid == getAfter(/databases/$(database)/documents/vendorChats/$(chatId)).data.vendorOwnerUid)
+            || (getAfter(/databases/$(database)/documents/vendorChats/$(chatId)).data.vendorOwnerUid == request.auth.uid
+              && incoming().senderRole == 'vendor'
+              && incoming().recipientUid == getAfter(/databases/$(database)/documents/vendorChats/$(chatId)).data.coupleUid)
+          )
+          && getAfter(/databases/$(database)/documents/vendorChats/$(chatId)).data.lastMessageSenderUid == request.auth.uid
+          && getAfter(/databases/$(database)/documents/vendorChats/$(chatId)).data.lastMessageAt == request.time;
+        allow update, delete: if false;
+      }
+    }
+  }
+}

@@ -1,0 +1,903 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user account profile containing PII and account linkage.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 200
+        },
+        "role": {
+          "type": "string",
+          "enum": ["guest", "couple", "vendor"]
+        },
+        "avatar": {
+          "type": "string",
+          "maxLength": 350000
+        },
+        "hasWeddingProject": {
+          "type": "boolean"
+        },
+        "vendorProfileId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "name", "email", "role", "hasWeddingProject", "createdAt", "updatedAt"]
+    },
+    "PublicProfile": {
+      "title": "PublicProfile",
+      "description": "Non-PII searchable directory profile for acronym/name guest lookup.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "acronym": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10
+        },
+        "searchable": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "displayName", "acronym", "searchable", "createdAt", "updatedAt"]
+    },
+    "EmailDirectoryEntry": {
+      "title": "EmailDirectoryEntry",
+      "description": "Zero-PII SHA-256 email hash index enabling single-read check of whether an email already belongs to a registered app user without exposing emails.",
+      "type": "object",
+      "properties": {
+        "emailHash": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["emailHash", "uid", "createdAt", "updatedAt"]
+    },
+    "WeddingProject": {
+      "title": "WeddingProject",
+      "description": "Wedding planning configuration and budget owned by a couple user.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "isCreated": {
+          "type": "boolean"
+        },
+        "coupleNames": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "partner1": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "partner2": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "weddingDate": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "city": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "venueName": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "address": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "time": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "chuppahTime": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "dinnerTime": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "partyTime": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "dressCode": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "storyMessage": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "giftRegistryUrl": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "totalBudget": {
+          "type": "number"
+        },
+        "guestCount": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string",
+          "enum": ["€", "$", "₪"]
+        },
+        "invitationCardUrl": {
+          "type": "string",
+          "maxLength": 650000
+        },
+        "invitationCardType": {
+          "type": "string",
+          "enum": ["pdf", "link", "image"]
+        },
+        "invitationCardName": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "ownerUid", "isCreated", "coupleNames", "partner1", "partner2", "weddingDate", "city", "totalBudget", "guestCount", "currency", "createdAt", "updatedAt"]
+    },
+    "WeddingTaskDoc": {
+      "title": "WeddingTaskDoc",
+      "description": "Individual checklist task belonging to a wedding project.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "weddingId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_progress", "completed"]
+        },
+        "isSelected": {
+          "type": "boolean"
+        },
+        "estimatedCost": {
+          "type": "number"
+        },
+        "paidAdvance": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "ownerUid", "weddingId", "title", "category", "status", "isSelected", "estimatedCost", "paidAdvance", "createdAt", "updatedAt"]
+    },
+    "WeddingGuestDoc": {
+      "title": "WeddingGuestDoc",
+      "description": "Invited guest record managed within a couple's wedding project.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "weddingId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "guestName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "guestEmail": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "guestUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "acronym": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "confirmed", "maybe", "declined"]
+        },
+        "invitedDate": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "invitationCardUrl": {
+          "type": "string",
+          "maxLength": 650000
+        },
+        "invitationCardType": {
+          "type": "string",
+          "enum": ["pdf", "link", "image"]
+        },
+        "invitationCardName": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "plusOneAllowed": {
+          "type": "boolean"
+        },
+        "weddingSide": {
+          "type": "string",
+          "enum": ["bride", "groom"]
+        },
+        "declineReason": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "ownerUid", "weddingId", "guestName", "guestEmail", "status", "invitedDate", "plusOneAllowed", "createdAt", "updatedAt"]
+    },
+    "InvitationDoc": {
+      "title": "InvitationDoc",
+      "description": "Shared wedding invitation connecting an organizer couple and an invited guest.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "organizerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "weddingId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "wedding": {
+          "type": "object"
+        },
+        "guestId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "guestUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "guestName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "guestEmail": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "confirmed", "maybe", "declined"]
+        },
+        "invitedDate": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "plusOneAllowed": {
+          "type": "boolean"
+        },
+        "personalNote": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "invitationCardUrl": {
+          "type": "string",
+          "maxLength": 650000
+        },
+        "invitationCardType": {
+          "type": "string",
+          "enum": ["pdf", "link", "image"]
+        },
+        "invitationCardName": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "lastUpdated": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "weddingSide": {
+          "type": "string",
+          "enum": ["bride", "groom"]
+        },
+        "declineReason": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "organizerUid", "weddingId", "wedding", "guestId", "guestName", "guestEmail", "status", "invitedDate", "plusOneAllowed", "createdAt", "updatedAt"]
+    },
+    "VendorDoc": {
+      "title": "VendorDoc",
+      "description": "Public vendor showcase profile without private PII.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "businessName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "ownerName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "location": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "storeLocations": {
+          "type": "array"
+        },
+        "workZones": {
+          "type": "array"
+        },
+        "priceTier": {
+          "type": "string",
+          "enum": ["$", "$$", "$$$", "$$$$"]
+        },
+        "startingPrice": {
+          "type": "number"
+        },
+        "rating": {
+          "type": "number"
+        },
+        "reviewCount": {
+          "type": "number"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "services": {
+          "type": "array"
+        },
+        "coverPhoto": {
+          "type": "string",
+          "maxLength": 350000
+        },
+        "logoUrl": {
+          "type": "string",
+          "maxLength": 350000
+        },
+        "portfolio": {
+          "type": "array"
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "instagramHandle": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "website": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "reviews": {
+          "type": "array"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "ownerUid", "businessName", "ownerName", "location", "priceTier", "startingPrice", "rating", "reviewCount", "description", "services", "coverPhoto", "portfolio", "verified", "createdAt", "updatedAt"]
+    },
+    "VendorPrivateContact": {
+      "title": "VendorPrivateContact",
+      "description": "Owner-only private contact details for a vendor.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerUid", "email", "phone", "createdAt", "updatedAt"]
+    },
+    "VendorPostLike": {
+      "title": "VendorPostLike",
+      "description": "User like interaction on a vendor portfolio post.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "vendorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "postId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "vendorId", "postId", "userUid", "createdAt", "updatedAt"]
+    },
+    "RsvpTokenDoc": {
+      "title": "RsvpTokenDoc",
+      "description": "Unguessable token document enabling email-only guests without an app account to confirm, set pending, or decline an invitation in real time.",
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "organizerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "weddingId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "invitationId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "guestId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "guestName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "guestEmail": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "coupleNames": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "weddingDate": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "venueName": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "city": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "address": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "time": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "chuppahTime": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "dinnerTime": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "partyTime": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "dressCode": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "storyMessage": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "giftRegistryUrl": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "invitationCardUrl": {
+          "type": "string",
+          "maxLength": 650000
+        },
+        "invitationCardType": {
+          "type": "string",
+          "enum": ["pdf", "link", "image"]
+        },
+        "invitationCardName": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "confirmed", "maybe", "declined"]
+        },
+        "respondedAt": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "weddingSide": {
+          "type": "string",
+          "enum": ["bride", "groom"]
+        },
+        "declineReason": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["token", "organizerUid", "weddingId", "invitationId", "guestId", "guestName", "coupleNames", "weddingDate", "venueName", "city", "status", "createdAt", "updatedAt"]
+    },
+    "VendorChatDoc": {
+      "title": "VendorChatDoc",
+      "description": "Direct real-time conversation thread between a wedding-planning couple and a verified vendor.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "coupleUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "coupleName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "vendorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "vendorOwnerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "vendorName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "vendorPhoto": {
+          "type": "string",
+          "maxLength": 350000
+        },
+        "weddingDate": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "weddingCity": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "lastMessageText": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "lastMessageSenderUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "lastMessageAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "coupleUnreadCount": {
+          "type": "number"
+        },
+        "vendorUnreadCount": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "coupleUid", "coupleName", "vendorId", "vendorOwnerUid", "vendorName", "lastMessageText", "lastMessageSenderUid", "lastMessageAt", "coupleUnreadCount", "vendorUnreadCount", "createdAt", "updatedAt"]
+    },
+    "VendorChatMessageDoc": {
+      "title": "VendorChatMessageDoc",
+      "description": "Individual message inside a direct couple-to-vendor conversation.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "chatId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "senderUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "recipientUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "senderName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "senderRole": {
+          "type": "string",
+          "enum": ["couple", "vendor"]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "chatId", "senderUid", "recipientUid", "senderName", "senderRole", "text", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user account documents strictly owned by the authenticated user."
+    },
+    "/publicProfiles/{userId}": {
+      "schema": { "$ref": "#/entities/PublicProfile" },
+      "description": "Non-PII searchable directory profiles for inviting registered members by acronym or name."
+    },
+    "/emailDirectory/{emailHash}": {
+      "schema": { "$ref": "#/entities/EmailDirectoryEntry" },
+      "description": "Zero-PII SHA-256 email hash index keyed by lowercase hex SHA-256 of verified user email for checking if an external invite email already belongs to a registered user."
+    },
+    "/weddings/{weddingId}": {
+      "schema": { "$ref": "#/entities/WeddingProject" },
+      "description": "Wedding planning configuration and financial envelope owned by a couple."
+    },
+    "/weddings/{weddingId}/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/WeddingTaskDoc" },
+      "description": "Checklist tasks and paid advances inside a wedding project."
+    },
+    "/weddings/{weddingId}/guests/{guestId}": {
+      "schema": { "$ref": "#/entities/WeddingGuestDoc" },
+      "description": "Couple's wedding guest list with RSVP status."
+    },
+    "/invitations/{invitationId}": {
+      "schema": { "$ref": "#/entities/InvitationDoc" },
+      "description": "Cross-user wedding invitations readable and updatable by organizer and target guest."
+    },
+    "/rsvpTokens/{token}": {
+      "schema": { "$ref": "#/entities/RsvpTokenDoc" },
+      "description": "Secret token documents allowing email-invited guests without an app account to respond directly from an email link."
+    },
+    "/vendors/{vendorId}": {
+      "schema": { "$ref": "#/entities/VendorDoc" },
+      "description": "Verified wedding vendor showcase profiles."
+    },
+    "/vendors/{vendorId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/VendorPrivateContact" },
+      "description": "Owner-restricted private contact info for vendors."
+    },
+    "/vendors/{vendorId}/likes/{likeId}": {
+      "schema": { "$ref": "#/entities/VendorPostLike" },
+      "description": "Authenticated user likes on vendor portfolio photos."
+    },
+    "/vendorChats/{chatId}": {
+      "schema": { "$ref": "#/entities/VendorChatDoc" },
+      "description": "Real-time direct chat threads between wedding couples and verified vendors."
+    },
+    "/vendorChats/{chatId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/VendorChatMessageDoc" },
+      "description": "Messages inside a couple-vendor chat thread."
+    }
+  }
+}
